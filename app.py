@@ -1,7 +1,6 @@
 from wsgiref.simple_server import make_server
 from wsgiref.util import FileWrapper
-
-import json, yaml, codecs, os, inspect, smbus
+import json, yaml, codecs, os, inspect, smbus, time
 
 # インストールルートディレクトリ取得
 irdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -9,7 +8,6 @@ irdir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 remote_controller_dir = '/remote-controller/remote-controller/'
 
 ext = '.yaml'
-
 hk9493 = {}
 
 # for RPI version 1, use "bus = smbus.SMBus(0)"
@@ -18,22 +16,22 @@ bus = smbus.SMBus(1)
 # This must match in the Arduino Sketch
 #SLAVE_ADDRESS = 0x04
 SLAVE_ADDRESS = 0x52
-data_numH = 0x31
-data_numL = 0x32
-data_numHL = [0x00,0x31,0x32]
-data_num = 10
-memo_no = 0
-block = []
+data_numH     = 0x31
+data_numL     = 0x32
+data_numHL    = [0x00,0x31,0x32]
+data_num      = 10
+memo_no       = 0
+block         = []
 
 #command
-R1_memo_no_write = 0x15  #bus-write(ADR,cmd,1)
-R2_data_num_read = 0x25 #bus-read(ADR,cmd,3)
-R3_data_read           = 0x35 #bus-read(ADR,cmd,n)
+R1_memo_no_write  = 0x15  #bus-write(ADR,cmd,1)
+R2_data_num_read  = 0x25 #bus-read(ADR,cmd,3)
+R3_data_read      = 0x35 #bus-read(ADR,cmd,n)
 W1_memo_no_write  = 0x19 #bus-write(ADR,cmd,1)
 W2_data_num_write = 0x29 #bus-write(ADR,cmd,3)
-W3_data_write           = 0x39 #bus-read(ADR,cmd,n)
-W4_flash_write           = 0x49 #bus-read(ADR,cmd,n)
-T1_trans_start             = 0x59 #bus-write(ADR,cmd,1)
+W3_data_write     = 0x39 #bus-read(ADR,cmd,n)
+W4_flash_write    = 0x49 #bus-read(ADR,cmd,n)
+T1_trans_start    = 0x59 #bus-write(ADR,cmd,1)
 
 # リモコンデータのロード
 def load_remocon_data():
@@ -88,39 +86,50 @@ def trans_command(block2):
     memo_no = [0x00 ] #for dummy
     bus.write_i2c_block_data(SLAVE_ADDRESS, T1_trans_start,memo_no )   #= 
 
-def app(environ, start_response):
-    status = '200 OK'
-    headers = [
-        ('Content-type', 'application/json; charset=utf-8'),
-        ('Access-Control-Allow-Origin', '*'),
-    ]
-    start_response(status, headers)
-    trans_command(hk9493['shoutou'])
-
-    return [json.dumps({'message':'hoge'}).encode("utf-8")]
-
 def application(environ, start_response):
     path = environ['PATH_INFO']
 
     if path == '/':
         start_response('200 OK', [('Content-Type', 'text/html')])
-        return render_html(environ, start_response)
-    
-    status = '200 OK'
-    headers = [
-        ('Content-type', 'application/json; charset=utf-8'),
-        ('Access-Control-Allow-Origin', '*'),
-    ]
-    start_response(status, headers)
+        return render('./index.html', environ, start_response)
+    elif path == '/css/main.css':
+        start_response('200 OK', [('Content-Type', 'text/css')])
+        return render('./css/main.css', environ, start_response)
+    elif path == '/js/main.js':
+        start_response('200 OK', [('Content-Type', 'text/javascript')])
+        return render('./js/main.js', environ, start_response)
+    elif path == '/hk9493/akarui':
+        return control_hk9493('akarui', environ, start_response)
+    elif path == '/hk9493/atatakaiiro':
+        return control_hk9493('atatakaiiro', environ, start_response)
+    elif path == '/hk9493/jouyatou':
+        return control_hk9493('jouyatou', environ, start_response)
+    elif path == '/hk9493/kurai':
+        return control_hk9493('kurai', environ, start_response)
+    elif path == '/hk9493/shiroiiro':
+        return control_hk9493('shiroiiro', environ, start_response)
+    elif path == '/hk9493/shoutou':
+        return control_hk9493('shoutou', environ, start_response)
+    elif path == '/hk9493/tentou':
+        return control_hk9493('tentou', environ, start_response)
+    elif path == '/hk9493/zentou':
+        return control_hk9493('zentou', environ, start_response)
+        
+    start_response('200 OK', [('Content-type', 'application/json')])
     return [json.dumps({'message':'Not Found'}).encode("utf-8")]
 
-def render_html(environ, start_response):
-    return FileWrapper(open('./index.html', 'rb'))
+def control_hk9493(operator, environ, start_response):
+    start_response('200 OK', [('Content-Type', 'text/javascript')])
+    trans_command(hk9493[operator])
+    time.sleep(0.05) # 0.05秒以下だと反応しないことがある
+    return [json.dumps({'message':operator}).encode("utf-8")]
+
+def render(file_path, environ, start_response):
+    return FileWrapper(open(file_path, 'rb'))
 
 def init_adrsir():
     global hk9493
     hk9493 = HK9493()
-    print(hk9493)
     print("Initialize ADRSIR.")
 
 with make_server('', 3000, application) as httpd:
